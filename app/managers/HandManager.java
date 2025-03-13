@@ -4,6 +4,7 @@ import akka.actor.ActorRef;
 import commands.BasicCommands;
 import structures.GameState;
 import structures.basic.Card;
+import structures.basic.Tile;
 
 public class HandManager {
 
@@ -16,7 +17,7 @@ public class HandManager {
      * @param gameState The current game state storing card data
      * @param player    The player drawing the card (1 for Player 1, 2 for Player 2)
      */
-    public static void drawCard(ActorRef out, GameState gameState, int player){
+    public static void drawCard(ActorRef out, GameState gameState, int player) {
         java.util.List<Card> deck = (player == 1) ? gameState.player1Deck : gameState.player2Deck;
         java.util.List<Card> hand = (player == 1) ? gameState.player1Hand : gameState.player2Hand;
 
@@ -54,11 +55,12 @@ public class HandManager {
      * @param gameState The current game state storing player mana and hand
      * @param card      The card being played
      * @param handPos   The card's position in the player's hand (1-6)
-     * @return          Returns `true` if the card was successfully played
+     * @return Returns `true` if the card was successfully played
      */
-    public static boolean deductManaAndRemoveCard(ActorRef out, GameState gameState, Card card, int handPos){
+    public static boolean deductManaAndRemoveCard(ActorRef out, GameState gameState, Card card, int handPos) {
         int index = handPos - 1; // Convert hand position to index
-        if (index < 0) return false; // Ensure index is valid
+        if (index < 0)
+            return false; // Ensure index is valid
 
         // Handle mana deduction and hand management for Player 1
         if (gameState.currentPlayer == 1) {
@@ -100,8 +102,39 @@ public class HandManager {
         return true;
     }
 
+    public static void playUnit(ActorRef out, GameState gameState, Tile clickedTile) {
+        // 1 Ensure the clicked tile is a valid summonable location
+        if (!gameState.summonableTiles.contains(clickedTile)) {
+            return;
+        }
+
+        Card cardToPlay = gameState.selectedCard;
+        int handPos = gameState.selectedHandPosition;
+
+        // 2 Deduct mana and remove the card from the player's hand
+        if (!HandManager.deductManaAndRemoveCard(out, gameState, cardToPlay, handPos)) {
+            return; // Mana insufficient or other restrictions
+        }
+
+        // 3 Summon the unit
+        UnitManager.summonUnit(out, gameState, cardToPlay, clickedTile);
+
+        // 4 Clear selection and reset tile highlights
+        gameState.selectedCard = null;
+        gameState.selectedHandPosition = -1;
+
+        // 5 Restore highlight status
+        BoardManager.clearSummonableTiles(out, gameState);
+        BoardManager.highlightCandidateTile(out, gameState);
+    }
+
+    public static void playSpell(ActorRef out, GameState gameState, Tile clickedTile) {
+        // Fill this method according to spell card logic
+    }
+
     /**
-     * Shifts the remaining cards in the player's hand forward to fill the empty slot
+     * Shifts the remaining cards in the player's hand forward to fill the empty
+     * slot
      * after playing a card.
      * - Deletes the UI representation of the removed card.
      * - Moves all subsequent cards forward.
@@ -111,7 +144,7 @@ public class HandManager {
      * @param removedIndex The index of the removed card
      * @param player       The player whose hand is being updated
      */
-    private static void shiftCardsUI(ActorRef out, java.util.List<Card> hand, int removedIndex, int player){
+    private static void shiftCardsUI(ActorRef out, java.util.List<Card> hand, int removedIndex, int player) {
         for (int i = removedIndex; i < 6; i++) {
             BasicCommands.deleteCard(out, i + 1);
             doSleep(40);
@@ -130,7 +163,10 @@ public class HandManager {
      *
      * @param ms The sleep duration in milliseconds
      */
-    private static void doSleep(int ms){
-        try { Thread.sleep(ms); } catch (InterruptedException e) {}
+    private static void doSleep(int ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+        }
     }
 }

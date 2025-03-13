@@ -3,6 +3,7 @@ package events;
 import akka.actor.ActorRef;
 import com.fasterxml.jackson.databind.JsonNode;
 import commands.BasicCommands;
+import managers.BoardManager;
 import structures.GameState;
 import structures.basic.Card;
 import structures.basic.Tile;
@@ -20,6 +21,15 @@ public class CardClicked implements EventProcessor {
 
 	@Override
 	public void processEvent(ActorRef out, GameState gameState, JsonNode message) {
+		
+		// Check if some unit moving
+		if (gameState.unitMoving) {
+			return;
+		}
+
+		// Clear previously highlighted tiles
+		BoardManager.clearTiles(out, gameState);
+
 		// 1️ Retrieve clicked card position from event message
 		int handPosition = message.get("position").asInt();
 		if (handPosition < 1 || handPosition > 6) {
@@ -32,9 +42,6 @@ public class CardClicked implements EventProcessor {
 			gameState.selectedCard = clickedCard; // Store selection in GameState
 			gameState.selectedHandPosition = handPosition; // Store selected hand position
 			BasicCommands.drawCard(out, clickedCard, handPosition, 1); // Highlight the selected card in UI
-
-			// 3️ Clear previously highlighted summonable tiles
-			gameState.summonableTiles.clear();
 
 			// 4️ Define summonable directions (adjacent & diagonal)
 			int[][] directions = new int[][] {

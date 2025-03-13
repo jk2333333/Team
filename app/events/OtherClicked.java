@@ -3,6 +3,7 @@ package events;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import akka.actor.ActorRef;
+import managers.BoardManager;
 import structures.GameState;
 
 /**

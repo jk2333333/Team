@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import akka.actor.ActorRef;
 import commands.BasicCommands;
+import managers.GeneralManager;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -144,8 +145,8 @@ public class Tile {
 	}
 
 	public void setHighlightStatus(ActorRef out, int mode) {
+		GeneralManager.sleep(10);
 		BasicCommands.drawTile(out, this, mode);
-		// System.out.println("Set: " + this.getTilex() + this.getTiley() + mode);
 		this.highlightStatus = mode;
 	}
 

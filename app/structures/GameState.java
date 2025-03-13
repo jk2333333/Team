@@ -47,8 +47,7 @@ public class GameState {
     public int selectedHandPosition = -1; // Default value when no card is selected
     public Unit selectedUnit;
     private int currentUnitId;
-
-    public Tile selectedTile;  // 记录当前选中的棋子 Tile
+    public boolean unitMoving;
 
 
     /**
@@ -64,6 +63,7 @@ public class GameState {
         attackableTiles = new ArrayList<>();
         summonableTiles = new ArrayList<>();
         currentUnitId = 0;
+        unitMoving = false;
     }
 
     /**

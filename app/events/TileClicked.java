@@ -7,7 +7,6 @@ import managers.HandManager;
 import managers.TurnManager;
 import managers.UnitManager;
 import structures.GameState;
-import structures.basic.Card;
 import structures.basic.Tile;
 
 /**
@@ -17,59 +16,6 @@ import structures.basic.Tile;
  * - If no card is selected, the event is ignored.
  */
 public class TileClicked implements EventProcessor {
-
-	public void summonUnit(ActorRef out, GameState gameState, Tile clickedTile) {
-		// 1 Ensure the clicked tile is a valid summonable location
-		if (!gameState.summonableTiles.contains(clickedTile)) {
-			return;
-		}
-
-		Card cardToPlay = gameState.selectedCard;
-		int handPos = gameState.selectedHandPosition;
-
-		// 2 Deduct mana and remove the card from the player's hand
-		if (!HandManager.deductManaAndRemoveCard(out, gameState, cardToPlay, handPos)) {
-			return; // Mana insufficient or other restrictions
-		}
-
-		// 3 Summon the unit
-		UnitManager.summonUnit(out, gameState, cardToPlay, clickedTile);
-
-		// 4 Clear selection and reset tile highlights
-		gameState.selectedCard = null;
-		gameState.selectedHandPosition = -1;
-
-		for (Tile tile : gameState.summonableTiles) {
-			tile.setHighlightStatus(out, 0);
-		}
-		gameState.summonableTiles.clear();
-	}
-
-	public void playSpell(ActorRef out, GameState gameState, Tile clickedTile) {
-
-	}
-
-	public void moveUnit(ActorRef out, GameState gameState, Tile clickedTile) {
-		if (!gameState.movableTiles.contains(clickedTile)) {
-			return;
-		}
-		System.out.println("event: " + gameState.selectedUnit.getId());
-		UnitManager.moveUnit(out, gameState, gameState.selectedUnit, clickedTile);
-
-		// Clear all highlights
-		BoardManager.clearMovableTiles(out, gameState);
-		BoardManager.clearAttackableTiles(out, gameState);
-		TurnManager.highlightPlayer1ReadyUnits(out, gameState);
-	}
-
-	public void attackUnit(ActorRef out, GameState gameState, JsonNode message, Tile targetTile) {
-		if (targetTile == null) {
-			return;
-		}
-
-		UnitAttacking unitAttacking = new UnitAttacking();
-		unitAttacking.processEvent(out, gameState, message);
-	}
 
 	/*
 	 * 1. Check if the clicked tile is within bounds
@@ -85,6 +31,12 @@ public class TileClicked implements EventProcessor {
 	 */
 	@Override
 	public void processEvent(ActorRef out, GameState gameState, JsonNode message) {
+
+		// Check if some unit moving
+		if (gameState.unitMoving) {
+			return;
+		}
+		
 		int tilex = message.get("tilex").asInt();
 		int tiley = message.get("tiley").asInt();
 
@@ -99,9 +51,9 @@ public class TileClicked implements EventProcessor {
 		// 3. If there is a card selected, summon unit or play spell
 		if (gameState.selectedCard != null && gameState.selectedCard.isCreature()) {
 			if (gameState.selectedCard.isCreature()) {
-				summonUnit(out, gameState, clickedTile);
+				HandManager.playUnit(out, gameState, clickedTile);
 			} else {
-				playSpell(out, gameState, clickedTile);
+				HandManager.playSpell(out, gameState, clickedTile);
 			}
 			return;
 		}
@@ -111,22 +63,21 @@ public class TileClicked implements EventProcessor {
 
 			// If the clicked tile is not highlighted, exit
 			if (clickedTile.getHighlightStatus() == 0) {
-				// Clear all highlights
-				BoardManager.clearMovableTiles(out, gameState);
-				BoardManager.clearAttackableTiles(out, gameState);
-				TurnManager.highlightPlayer1ReadyUnits(out, gameState);
-				gameState.selectedUnit = null;
-				return;
+				// Clear all highlights and highlight candidate tiles
+				BoardManager.highlightCandidateTile(out, gameState);
 			}
 
 			// If the clicked tile is movable, move the unit
-			if (clickedTile.getHighlightStatus() == 1) {
-				moveUnit(out, gameState, clickedTile);
+			else if (clickedTile.getHighlightStatus() == 1 && gameState.movableTiles.contains(clickedTile)) {
+				UnitManager.moveUnit(out, gameState, clickedTile);
 			}
 
 			// If the clicked tile is attackable, attack
-			if (clickedTile.getHighlightStatus() == 2) {
-				attackUnit(out, gameState, message, clickedTile);
+			else if (clickedTile.getHighlightStatus() == 2 && gameState.attackableTiles.contains(clickedTile)) {
+				UnitManager.attackUnit(out, gameState, clickedTile);
+
+				// Highlight candidate unit tiles
+				BoardManager.highlightCandidateTile(out, gameState);
 			}
 
 			// Set selectedUnit as null again
@@ -141,18 +92,17 @@ public class TileClicked implements EventProcessor {
 			// Store selected unit
 			gameState.selectedUnit = clickedTile.getUnit();
 
-			// Dehighlight clicked tile
-			clickedTile.setHighlightStatus(out, 0);
+			// Dehighlight candidate tiles
+			BoardManager.dehighlightUnitTile(out, gameState);
 
 			// Highlight movable unit
 			if (clickedTile.getUnit().canMove()) {
-				UnitManager.highlightMovableTile(out, gameState, clickedTile);
+				BoardManager.highlightMovableTile(out, gameState, clickedTile);
 			}
 
 			// Highlight attackable unit
 			if (clickedTile.getUnit().canAttack(gameState)) {
-				System.out.println("Can Attack: " + clickedTile.getUnit().canAttack(gameState));
-				UnitManager.highlightAttackableTile(out, gameState, clickedTile);
+				BoardManager.highlightAttackableTile(out, gameState, clickedTile);
 			}
 
 			return;

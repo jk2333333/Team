@@ -31,30 +31,18 @@ public class TurnManager {
             u.resetTurnStatus();
         }
 
-        // Clear all selected objects and UI highlights
+        // Clear all selected objects
         gameState.selectedCard = null;
         gameState.selectedHandPosition = -1;
         gameState.selectedUnit = null;
-        gameState.summonableTiles.clear();
-        gameState.movableTiles.clear();
 
         if (gameState.currentPlayer == 1) {
-            highlightPlayer1ReadyUnits(out, gameState);
+            BoardManager.highlightCandidateTile(out, gameState);
+        } else {
+            BoardManager.clearTiles(out, gameState);
         }
         // Notify the front-end about the turn switch
         BasicCommands.addPlayer1Notification(out, "Turn switched to Player " + gameState.currentPlayer
                 + ", Turn = " + gameState.currentTurn, 2);
-    }
-
-    public static void highlightPlayer1ReadyUnits(ActorRef out, GameState gameState) {
-        for (Unit unit : gameState.playerUnits) {
-            if (unit.getOwner() != gameState.currentPlayer) {
-                continue;
-            }
-            if (unit.canMove() || (unit.canAttack(gameState))) {
-                System.out.println("Ready");
-                unit.getTile().setHighlightStatus(out, 1);
-            }
-        }
     }
 }

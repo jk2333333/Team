@@ -1,9 +1,10 @@
 package structures.basic;
 
+import java.util.Objects;
+
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import actors.GameActor;
 import structures.GameState;
 
 /**
@@ -45,6 +46,18 @@ public class Unit {
 	private boolean isAvartar2;
 
 	public Unit() {
+		this.moves = 0;
+		this.maxMoves = 1;
+		this.attacks = 0;
+		this.maxAttacks = 1;
+		this.sleeping = true;
+
+		this.isAvartar1 = false;
+		this.isAvartar2 = false;
+	}
+
+	public Unit(int id) {
+		this.id = id;
 		this.moves = 0;
 		this.maxMoves = 1;
 		this.attacks = 0;
@@ -290,5 +303,25 @@ public class Unit {
 		}
 		System.out.println("Player not exist. ");
 		return false;
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+
+		if (this == obj) {
+			return true;
+		}
+
+		if (obj == null || this.getClass() != obj.getClass()) {
+			return false;
+		}
+
+		Unit unit = (Unit) obj;
+		return this.id == unit.id;
+	}
+
+	@Override
+	public int hashCode() {
+		return Objects.hash(this.id);
 	}
 }
