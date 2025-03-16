@@ -58,7 +58,7 @@ public class Initialize implements EventProcessor {
 		for (int i = 0; i < 3; i++) {
 			if (!gameState.player1Deck.isEmpty()) {
 				// Uses HandManager to draw cards
-				HandManager.drawCard(out, gameState, 1);
+				HandManager.drawCard(out, gameState);
 			}
 		}
 
@@ -66,8 +66,5 @@ public class Initialize implements EventProcessor {
 		gameState.player1.setMana(2);
 		BasicCommands.setPlayer1Mana(out, gameState.player1);
 
-		// 8️ Trigger `StartTurn` to initialize game mechanics
-		StartTurn startTurnHandler = new StartTurn();
-		startTurnHandler.processEvent(out, gameState, null);
 	}
 }

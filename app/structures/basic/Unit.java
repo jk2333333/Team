@@ -1,10 +1,15 @@
 package structures.basic;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
+import akka.actor.ActorRef;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import card.abilities.Ability;
+import commands.BasicCommands;
 import structures.GameState;
 
 /**
@@ -44,6 +49,9 @@ public class Unit {
 	private boolean sleeping;
 	private boolean isAvartar1;
 	private boolean isAvartar2;
+	// 添加能力列表支持
+	@JsonIgnore
+	private List<Ability> abilities = new ArrayList<>();
 
 	public Unit() {
 		this.moves = 0;
@@ -117,7 +125,8 @@ public class Unit {
 		return health;
 	}
 
-	public void setHealth(int health) {
+	public void setHealth(ActorRef out, int health) {
+		BasicCommands.setUnitHealth(out, this, health);
 		this.health = health;
 	}
 
@@ -125,7 +134,8 @@ public class Unit {
 		return attack;
 	}
 
-	public void setAttack(int attack) {
+	public void setAttack(ActorRef out, int attack) {
+		BasicCommands.setUnitAttack(out, this, attack);
 		this.attack = attack;
 	}
 
@@ -183,7 +193,7 @@ public class Unit {
 
 	/**
 	 * Sets the unit's position based on the given tile.
-	 * 
+	 *
 	 * @param tile The tile where the unit is placed.
 	 */
 	@JsonIgnore
@@ -269,7 +279,7 @@ public class Unit {
 
 	/**
 	 * Retrieves the tile where the unit is currently located.
-	 * 
+	 *
 	 * @return The tile occupied by the unit.
 	 */
 	public Tile getTile() {
@@ -278,7 +288,7 @@ public class Unit {
 
 	/**
 	 * Sets the tile where the unit is currently located.
-	 * 
+	 *
 	 * @param tile The tile occupied by the unit.
 	 */
 	public void setTile(Tile tile) {
@@ -324,4 +334,104 @@ public class Unit {
 	public int hashCode() {
 		return Objects.hash(this.id);
 	}
+
+	/**
+	 * Adds an ability to this unit
+	 *
+	 * @param ability The ability to add
+	 */
+	public void addAbility(Ability ability) {
+		if (ability != null) {
+			abilities.add(ability);
+		}
+	}
+
+	/**
+	 * Gets all abilities of this unit
+	 *
+	 * @return The list of abilities
+	 */
+	public List<Ability> getAbilities() {
+		return abilities;
+	}
+
+	/**
+	 * Checks if this unit has an ability of the specified type
+	 *
+	 * @param abilityClass The ability class to check for
+	 * @return true if the unit has the ability
+	 */
+	public boolean hasAbility(Class<? extends Ability> abilityClass) {
+		for (Ability ability : abilities) {
+			if (abilityClass.isInstance(ability)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	public void removeAbility(Ability ability) {
+		abilities.remove(ability);
+	}
+
+	/**
+	 * Checks if the unit has moved this turn.
+	 * 
+	 * @return true if the unit has moved, false otherwise.
+	 */
+	public boolean hasMoved() {
+		return moves > 0;
+	}
+
+	/**
+	 * Checks if the unit has attacked this turn.
+	 * 
+	 * @return true if the unit has attacked, false otherwise.
+	 */
+	public boolean hasAttacked() {
+		return attacks > 0;
+	}
+
+	/**
+	 * Moves the unit to a specified tile.
+	 * Updates the unit's tile reference and marks it as moved.
+	 *
+	 * @param targetTile The tile to move the unit to.
+	 */
+	public void move(Tile targetTile) {
+		if (this.tile != null) {
+			this.tile.setUnit(null); // Clear previous tile
+		}
+		this.tile = targetTile;
+		targetTile.setUnit(this);
+		this.addMoves();
+	}
+
+	public boolean isDead() {
+		return health <= 0;
+	}
+
+	public void setHasMoved(boolean hasMoved) {
+		this.moves = hasMoved ? this.maxMoves : 0;
+	}
+
+	public void setHasAttacked(boolean hasAttacked) {
+		this.attacks = hasAttacked ? this.maxAttacks : 0;
+	}
+
+	public int getTilex() {
+		return position.getTilex();
+	}
+
+	public int getTiley() {
+		return position.getTiley();
+	}
+
+	public void setTileDirectly(Tile tile) {
+		this.tile = tile;
+		if (tile != null) {
+			this.position = new Position(tile.getXpos(), tile.getYpos(), tile.getTilex(), tile.getTiley());
+		}
+	}
+
 }

@@ -47,7 +47,8 @@ public class GameState {
     public int selectedHandPosition = -1; // Default value when no card is selected
     public Unit selectedUnit;
     private int currentUnitId;
-    public boolean unitMoving;
+    public boolean unitActing;
+    public boolean AIActing;
 
 
     /**
@@ -62,8 +63,8 @@ public class GameState {
         movableTiles = new ArrayList<>();
         attackableTiles = new ArrayList<>();
         summonableTiles = new ArrayList<>();
-        currentUnitId = 0;
-        unitMoving = false;
+        currentUnitId = 2;
+        unitActing = false;
     }
 
     /**

@@ -1,10 +1,11 @@
 package events;
 
 import akka.actor.ActorRef;
+import commands.BasicCommands;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import managers.BoardManager;
 import managers.HandManager;
-import managers.TurnManager;
 import managers.UnitManager;
 import structures.GameState;
 import structures.basic.Tile;
@@ -33,10 +34,10 @@ public class TileClicked implements EventProcessor {
 	public void processEvent(ActorRef out, GameState gameState, JsonNode message) {
 
 		// Check if some unit moving
-		if (gameState.unitMoving) {
+		if (gameState.unitActing) {
 			return;
 		}
-		
+
 		int tilex = message.get("tilex").asInt();
 		int tiley = message.get("tiley").asInt();
 
@@ -49,8 +50,18 @@ public class TileClicked implements EventProcessor {
 		Tile clickedTile = gameState.board[tilex][tiley];
 
 		// 3. If there is a card selected, summon unit or play spell
-		if (gameState.selectedCard != null && gameState.selectedCard.isCreature()) {
+		if (gameState.selectedCard != null) {
+
 			if (gameState.selectedCard.isCreature()) {
+
+				// If the clicked tile is not highlighted, exit
+				if (clickedTile.getHighlightStatus() == 0) {
+					// Clear all highlights and highlight candidate tiles
+					BasicCommands.addPlayer1Notification(out, "Can't place unit here! ", 2);
+					BoardManager.highlightCandidateTile(out, gameState);
+					return;
+				}
+
 				HandManager.playUnit(out, gameState, clickedTile);
 			} else {
 				HandManager.playSpell(out, gameState, clickedTile);
@@ -64,6 +75,7 @@ public class TileClicked implements EventProcessor {
 			// If the clicked tile is not highlighted, exit
 			if (clickedTile.getHighlightStatus() == 0) {
 				// Clear all highlights and highlight candidate tiles
+				BasicCommands.addPlayer1Notification(out, "Can't move here! ", 2);
 				BoardManager.highlightCandidateTile(out, gameState);
 			}
 
@@ -88,6 +100,10 @@ public class TileClicked implements EventProcessor {
 
 		// 5. If the tile has an own unit, highlight the movable and attackable tiles
 		if (clickedTile.getUnit() != null && clickedTile.getUnit().getOwner() == gameState.currentPlayer) {
+
+			if (clickedTile.getHighlightStatus() == 0) {
+				return;
+			}
 
 			// Store selected unit
 			gameState.selectedUnit = clickedTile.getUnit();

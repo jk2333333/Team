@@ -31,7 +31,12 @@ public class Player {
 	public int getMana() {
 		return mana;
 	}
+
 	public void setMana(int mana) {
+		if (mana > 9) {
+			this.mana = 9;
+			return;
+		}
 		this.mana = mana;
 	}
 	

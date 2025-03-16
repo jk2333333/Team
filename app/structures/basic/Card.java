@@ -1,5 +1,11 @@
 package structures.basic;
 
+import actors.GameActor;
+import akka.actor.ActorRef;
+import commands.BasicCommands;
+import managers.GeneralManager;
+import structures.GameState;
+
 /**
  * 这是卡牌的基本表示，用于玩家手牌的渲染。
  * 卡牌具有 id、名称 (cardname) 和法力消耗 (manacost)。
@@ -104,19 +110,43 @@ public class Card {
 	}
 
 	// **新增 getter 和 setter**
+	/**
+	 * 获取卡牌攻击力，从 bigCard 中获取
+	 * 
+	 * @return 卡牌攻击力
+	 */
 	public int getAttack() {
+		// 优先从 bigCard 中获取攻击力
+		if (this.bigCard != null && this.isCreature()) {
+			return this.bigCard.getAttack();
+		}
 		return attack;
+	}
+
+	/**
+	 * 获取卡牌生命值，从 bigCard 中获取
+	 * 
+	 * @return 卡牌生命值
+	 */
+	public int getHealth() {
+		// 优先从 bigCard 中获取生命值
+		if (this.bigCard != null && this.isCreature()) {
+			return this.bigCard.getHealth();
+		}
+		return health;
 	}
 
 	public void setAttack(int attack) {
 		this.attack = attack;
 	}
 
-	public int getHealth() {
-		return health;
-	}
-
 	public void setHealth(int health) {
 		this.health = health;
 	}
+
+	public void setHighlightStatus(ActorRef out, GameState gameState, int mode) {
+		GeneralManager.sleep(10);
+		BasicCommands.drawCard(out, this, gameState.selectedHandPosition, mode);
+	}
+
 }

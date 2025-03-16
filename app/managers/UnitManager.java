@@ -1,6 +1,17 @@
 package managers;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+
+import org.apache.commons.lang3.SystemUtils;
+
 import akka.actor.ActorRef;
+import card.abilities.Ability;
+import card.abilities.Artifact;
+import card.abilities.OnHit;
+import card.abilities.Deathwatch;
+import card.abilities.Rush;
 import commands.BasicCommands;
 import structures.GameState;
 import structures.basic.Card;
@@ -38,8 +49,8 @@ public class UnitManager {
     public static void loadAndPlaceAvatars(ActorRef out, GameState gameState, Tile p1Tile, Tile p2Tile)
             throws InterruptedException {
         // Load Player 1 and Player 2's avatars
-        Unit p1Avatar = BasicObjectBuilders.loadUnit(StaticConfFiles.humanAvatar, 100, Unit.class);
-        Unit p2Avatar = BasicObjectBuilders.loadUnit(StaticConfFiles.aiAvatar, 101, Unit.class);
+        Unit p1Avatar = BasicObjectBuilders.loadUnit(StaticConfFiles.humanAvatar, 0, Unit.class);
+        Unit p2Avatar = BasicObjectBuilders.loadUnit(StaticConfFiles.aiAvatar, 1, Unit.class);
 
         // Set avatar units is avartar
         p1Avatar.setIsAvartar(1);
@@ -56,10 +67,10 @@ public class UnitManager {
         p2Avatar.setOwner(2);
 
         // Set attack and health attributes
-        p1Avatar.setAttack(2);
-        p1Avatar.setHealth(20);
-        p2Avatar.setAttack(2);
-        p2Avatar.setHealth(20);
+        p1Avatar.setAttack(out, 2);
+        p1Avatar.setHealth(out, 20);
+        p2Avatar.setAttack(out, 2);
+        p2Avatar.setHealth(out, 20);
 
         // Render avatars on the board
         BasicCommands.drawUnit(out, p1Avatar, p1Tile);
@@ -92,102 +103,158 @@ public class UnitManager {
      * @param card        The card used for summoning the unit.
      * @param clickedTile The tile where the unit will be placed.
      */
-    public static void summonUnit(ActorRef out, GameState gameState, Card card, Tile clickedTile) {
+    public static Unit summonUnitDirectly(ActorRef out, GameState gameState, String config, int attack, int health,
+            Tile targetTile) {
         // Load the unit based on the card's configuration
-        Unit newUnit = BasicObjectBuilders.loadUnit(card.getUnitConfig(), -1, Unit.class);
-        newUnit.setOwner(1);
+        Unit newUnit = BasicObjectBuilders.loadUnit(config, -1, Unit.class);
+        newUnit.setOwner(gameState.currentPlayer);
         newUnit.setId(gameState.getCurrentUnitId());
 
-        // Retrieve attack and health values from the card
-        int attackValue = card.getAttack();
-        int healthValue = card.getHealth();
-
         // Ensure the unit has at least 1 health (prevents immediate death)
-        if (healthValue <= 0) {
-            healthValue = 1;
+        if (health <= 0) {
+            health = 1;
         }
 
         // Assign the attack and health values
-        newUnit.setAttack(attackValue);
-        newUnit.setHealth(healthValue);
+        newUnit.setAttack(out, attack);
+        newUnit.setHealth(out, health);
 
         // Set unit position and mark the tile as occupied
-        newUnit.setTile(clickedTile);
-        clickedTile.setUnit(newUnit);
+        newUnit.setTile(targetTile);
+        targetTile.setUnit(newUnit);
 
         // Notify the UI to render the unit
-        BasicCommands.drawUnit(out, newUnit, clickedTile);
+        BasicCommands.drawUnit(out, newUnit, targetTile);
         BasicCommands.playUnitAnimation(out, newUnit, UnitAnimationType.idle);
 
         // Ensure UI updates attack & health after unit rendering
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
+        GeneralManager.sleep(100);
 
         // Update UI with correct attack and health values
-        BasicCommands.setUnitAttack(out, newUnit, attackValue);
-        BasicCommands.setUnitHealth(out, newUnit, healthValue);
+        BasicCommands.setUnitAttack(out, newUnit, attack);
+        BasicCommands.setUnitHealth(out, newUnit, health);
+
+        // Check if the unit has Rush ability and apply it
+        if (Rush.hasRushAbility(newUnit)) {
+            newUnit.resetTurnStatus();
+        }
 
         // Add the unit to the unit list
         gameState.playerUnits.add(newUnit);
+
+        return newUnit;
+    }
+
+    public static Unit summonUnit(ActorRef out, GameState gameState, Card card, Tile targetTile) {
+        return summonUnitDirectly(out, gameState, card.getUnitConfig(), card.getAttack(), card.getHealth(), targetTile);
     }
 
     /**
      * Unit move to another tiles.
-     * This method:
-     * - {{ Do something }}
+     * This method will:
+     * Clear
      * 
-     * @param out         WebSocket communication channel for UI updates.
-     * @param gameState   The current game state tracking units and board state.
-     * @param unit        The unit ready to move.
-     * @param clickedTile The tile where the unit will move to.
+     * @param out        WebSocket communication channel for UI updates.
+     * @param gameState  The current game state tracking units and board state.
+     * @param targetTile The tile where the unit will move to.
      */
-    public static void moveUnit(ActorRef out, GameState gameState, Tile clickedTile) {
+    public static void moveUnit(ActorRef out, GameState gameState, Tile targetTile) {
         // Clear all highlights
         BoardManager.clearMovableTiles(out, gameState);
         BoardManager.clearAttackableTiles(out, gameState);
-        
+
         Unit unit = gameState.selectedUnit;
         if (unit.getTile() == null) {
             return;
         }
         unit.getTile().setUnit(null);
-        unit.setTile(clickedTile);
-        clickedTile.setUnit(unit);
-        BasicCommands.moveUnitToTile(out, unit, clickedTile);
+        unit.setTile(targetTile);
+        targetTile.setUnit(unit);
+        BasicCommands.moveUnitToTile(out, unit, targetTile);
         unit.addMoves();
     }
 
-    public static void attackUnit(ActorRef out, GameState gameState, Tile clickedTile) {
+    /**
+     * Performs an attack action from the currently selected unit to a unit on the
+     * specified tile.
+     * <p>
+     * This method will:
+     * - Clears all highlighted movable/attackable tiles.
+     * - Retrieves the attacker (the currently selected unit in gameState).
+     * - Retrieves the target unit from the specified tile.
+     * - Deals damage to the target and marks the attacker as having attacked and
+     * unable to move.
+     * - Causes a counter-attack from the target (if still alive) back to the
+     * attacker.
+     *
+     * @param out        WebSocket communication channel for UI updates.
+     * @param gameState  The current game state tracking units and board state.
+     * @param targetTile The tile that contains the unit to be attacked.
+     */
+    public static void attackUnit(ActorRef out, GameState gameState, Tile targetTile) {
         // Clear all highlights
         BoardManager.clearMovableTiles(out, gameState);
         BoardManager.clearAttackableTiles(out, gameState);
 
         Unit attacker = gameState.selectedUnit;
-        Unit target = clickedTile.getUnit();
+        Unit target = targetTile.getUnit();
+
+        // Set unitActing as true while play attacking animation
+        gameState.unitActing = true;
 
         // Attack and attack back
         UnitManager.causeDamage(out, gameState, attacker, target);
         attacker.addAttacks();
         attacker.cantMove();
 
-        target = clickedTile.getUnit();
+        target = targetTile.getUnit();
         UnitManager.causeDamage(out, gameState, target, attacker);
+
+        // Set unitActing as false after play attacking animation
+        gameState.unitActing = false;
     }
 
+    /**
+     * Cause the attacker to deal damage to the target.
+     * This method:
+     * - Checks if the attacker or target is null; if so, returns immediately.
+     * - Subtracts the attacker's attack value from the target's health.
+     * - Ensures the target's health doesn't drop below zero.
+     * - If the target is an avatar, updates the corresponding player's health.
+     * - Plays the attack, hit, and idle animations for both units.
+     * - If the target's health reaches zero, removes the target from the game.
+     *
+     * @param out       WebSocket communication channel for UI updates.
+     * @param gameState The current game state containing units, players, etc.
+     * @param attacker  The unit performing the attack.
+     * @param target    The unit receiving the attack.
+     */
     public static void causeDamage(ActorRef out, GameState gameState, Unit attacker, Unit target) {
         if (attacker == null || target == null) {
             return; // Ensure the attacker and target are exist
         }
 
+        // Play attack animation
+        UnitManager.playAnimation(out, attacker, UnitAnimationType.attack, 0);
+        UnitManager.playAnimation(out, target, UnitAnimationType.hit, 1000);
+        UnitManager.playAnimation(out, attacker, UnitAnimationType.idle, 0);
+        UnitManager.playAnimation(out, target, UnitAnimationType.idle, 0);
+
+        // Trigger Artifact effects for all units
+        boolean hasArtifact = false;
+        if (target.getIsAvartar(1) || target.getIsAvartar(2)) {
+            hasArtifact = triggerArtifactEffects(out, gameState, target);
+        }
+        if (hasArtifact) {
+            return;
+        }
+
         // Calculate attack demage
-        target.setHealth(target.getHealth() - attacker.getAttack());
+        target.setHealth(out, target.getHealth() - attacker.getAttack());
 
         // Ensure the health >= 0
         if (target.getHealth() <= 0) {
-            target.setHealth(0);
+            target.setHealth(out, 0);
         }
 
         // If the unit is avartar, update the player health
@@ -200,13 +267,19 @@ public class UnitManager {
             BasicCommands.setPlayer2Health(out, gameState.player2);
         }
 
-        // Play attack animation
         BasicCommands.setUnitHealth(out, target, target.getHealth());
         BasicCommands.setUnitHealth(out, attacker, attacker.getHealth());
-        UnitManager.playAnimation(out, attacker, UnitAnimationType.attack, 0);
-        UnitManager.playAnimation(out, target, UnitAnimationType.hit, 1000);
-        UnitManager.playAnimation(out, attacker, UnitAnimationType.idle, 0);
-        UnitManager.playAnimation(out, target, UnitAnimationType.idle, 0);
+
+        boolean hasOnHit = triggerOnHitEffects(out, gameState, attacker);
+        if (hasOnHit) {
+            System.out.println("on hit");
+            Random random = new Random();
+            List<Tile> emptyAdjacentTiles = BoardManager.getAdjacentTiles(gameState, attacker, true);
+            if (!emptyAdjacentTiles.isEmpty()) {
+                Tile summonTile = emptyAdjacentTiles.get(random.nextInt(emptyAdjacentTiles.size()));
+                UnitManager.summonUnitDirectly(out, gameState, StaticConfFiles.wraithling, 1, 1, summonTile);
+            }
+        }
 
         // If the unit is dead, remove the unit
         if (target.getHealth() <= 0) {
@@ -215,11 +288,70 @@ public class UnitManager {
     }
 
     public static void removeUnit(ActorRef out, GameState gameState, Unit unit) {
+        // Store the unit's tile before removing it
+        if (unit == null) {
+            return;
+        }
+
+        // Trigger Deathwatch effects for all units
+        triggerDeathwatchEffects(out, gameState, unit);
+
+        // Remove the unit from its tile
         unit.getTile().setUnit(null);
+
+        // Play death animation
         UnitManager.playAnimation(out, unit, UnitAnimationType.death, 2000);
-        BasicCommands.deleteUnit(out, unit);
+
+        // Remove from the game state
         gameState.playerUnits.remove(unit);
-        unit = null;
+
+        // Delete the unit from the UI
+        BasicCommands.deleteUnit(out, unit);
+    }
+
+    /**
+     * Triggers Deathwatch effects for all units when a unit dies
+     * 
+     * @param out       The ActorRef for UI updates
+     * @param gameState The current game state
+     * @param deadUnit  The unit that died
+     */
+    private static void triggerDeathwatchEffects(ActorRef out, GameState gameState, Unit deadUnit) {
+        // Loop through all units and trigger Deathwatch effects
+        List<Unit> copy = new ArrayList<>(gameState.playerUnits);
+        for (Unit unit : copy) {
+            for (Ability ability : unit.getAbilities()) {
+                if (ability instanceof Deathwatch) {
+                    ((Deathwatch) ability).onUnitDeath(out, gameState, unit, deadUnit);
+                }
+            }
+        }
+    }
+
+    private static boolean triggerArtifactEffects(ActorRef out, GameState gameState, Unit unit) {
+        for (Ability ability : unit.getAbilities()) {
+            if (ability instanceof Artifact) {
+                System.out.println(1);
+                boolean applied = ((Artifact) ability).onHurt(out, gameState);
+                if (applied) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean triggerOnHitEffects(ActorRef out, GameState gameState, Unit unit) {
+        for (Ability ability : unit.getAbilities()) {
+            if (ability instanceof OnHit) {
+                System.out.println(1);
+                boolean applied = ((OnHit) ability).onHit(out, gameState);
+                if (applied) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     public static void playAnimation(ActorRef out, Unit unit, UnitAnimationType type, int time) {

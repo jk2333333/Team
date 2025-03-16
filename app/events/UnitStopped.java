@@ -30,7 +30,7 @@ public class UnitStopped implements EventProcessor {
 	public void processEvent(ActorRef out, GameState gameState, JsonNode message) {
 
 		BoardManager.highlightCandidateTile(out, gameState);
-		gameState.unitMoving = false;
+		gameState.unitActing = false;
 	}
 
 }
